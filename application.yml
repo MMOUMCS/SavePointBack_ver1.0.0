@@ -1,0 +1,71 @@
+
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      data-source-properties:
+        sslmode: require
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 10MB
+      max-request-size: 10MB
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+    properties:
+      hibernate.format_sql: true
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+
+fcm:
+  type: ${FCM_TYPE}
+  project_id: ${FCM_PROJECT_ID}
+  private_key_id: ${FCM_PRIVATE_KEY_ID}
+  private_key: ${FCM_PRIVATE_KEY}
+  client_email: ${FCM_CLIENT_EMAIL}
+  client_id: ${FCM_CLIENT_ID}
+  auth_uri: ${FCM_AUTH_URI}
+  token_uri: ${FCM_TOKEN_URI}
+  auth_provider_x509_cert_url: ${FCM_AUTH_PROVIDER_X509_CERT_URL}
+  client_x509_cert_url: ${FCM_CLIENT_X509_CERT_URL}
+  universe_domain: ${FCM_UNIVERSE_DOMAIN}
+
+
+# AWS S3 설정
+cloud:
+  aws:
+    credentials:
+      access-key: ${CLOUD_AWS_CREDENTIALS_ACCESS_KEY}
+      secret-key: ${CLOUD_AWS_CREDENTIALS_SECRET_KEY}
+    s3:
+      bucket: "couple-album"
+      bucket.name: "couple-album"
+      public-url: ${CLOUD_AWS_S3_PUBLIC_URL}
+    region:
+      static: auto
+    stack:
+      auto: false
+    endpoint:
+      uri: ${CLOUD_AWS_ENDPOINT}
+
+server:
+  port: 8080
+  address: 0.0.0.0
+
+logging:
+  level:
+    org.hibernate.SQL: DEBUG
+    org.hibernate.tool.hbm2ddl: DEBUG
+
+jwt:
+  secret: ${JWT_SECRET}
+
+springdoc:
+  swagger-ui:
+    path: ${SPRINGDOC_SWAGGER_UI}
+  api-docs:
+    path: ${SPRINGDOC_SWAGGER_API_DOCS}
