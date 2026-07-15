@@ -1,5 +1,8 @@
 package com.couple.gallery.couple_gallery_backend.controller;
 
+
+// 프론트엔드에서 온 요청을 가장 먼저 받아서 서비스 부서에 전달하고 답장을 보내는 안내 데스크.
+
 import com.couple.gallery.couple_gallery_backend.domain.User;
 import com.couple.gallery.couple_gallery_backend.dto.*;
 import com.couple.gallery.couple_gallery_backend.service.UserService;
@@ -17,29 +20,35 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 @Tag(name = "유저 인증 및 회원 관리 API", description = "회원가입, JWT 로그인, 이메일별 유저 조회 및 프로필 이미지 수정 기능을 제공합니다.")
-@RestController
-@RequestMapping("/api/users")
+@RestController // 프론트엔드와 데이터를 주고받기 위함.
+@RequestMapping("/api/users") // 데스크 주소 지정.
 public class UserController {
 
-    private final UserService userService;
+    private final UserService userService; // 의존성 주입. 내 일 뒷바라지 해 줄 객체 하나만 연결해줘.
 
-    // ObjectMapper, Validator는 이제 필요 없어서 제거했습니다.
     public UserController(UserService userService) {
         this.userService = userService;
     }
 
     // ==========================================
-    // 1. 회원가입 API (파일 업로드 제거됨 -> JSON만 받음)
+    // 1. 회원가입 API (JSON만 받음)
     // ==========================================
     @Operation(
             summary = "회원가입",
             description = "새로운 유저 정보를 등록합니다. 비밀번호는 서버에서 자동으로 암호화되어 저장됩니다."
     )
-    @PostMapping(endpoint.USER_REGISTER) // consumes = MULTIPART... 제거됨
+    @PostMapping(endpoint.USER_REGISTER)
     public ResponseEntity<User> register(@RequestBody @Valid UserRegisterRequest request) {
-        // @RequestBody: JSON을 객체로 자동 변환해줌 (ObjectMapper 불필요)
-        // @Valid: DTO에 붙은 @NotBlank 등을 자동 검사해줌 (Validator 불필요)
+        // @RequestBody: json을 객체(class)로 변환해서 전달.
+        // @Valid: 전달 전에 빈 칸이 있거나 형식에 안맞으면 입구컷.
+        // UserRegisterRequest 라는 DTO.
+        // ㄴ DTO : 데이터 임시 저장소 (데이터가 들어오고 나면 쓰레기통에 버림) (프론트->백엔드)
+        // ㄴ ENTITY : 실제 저장되는 핵심 데이터 객체. DB와 1:1 매핑(연결). (백엔드 내에서 사용하기 좋게 조립)
+        // ㄴ DOMAIN : ENTITY의 모임.
+        // !! ENTITY와 DTO를 분리하는 이유 : 그대로 노출시키거나 통신도구로 사용하면 보안상 민감한 정보가 외부에 노출될 위험이 있고,
+        // 데이터 포맷이 바뀔때마다 DB까지 수정해야하는 문제 발생.
 
+        // 1) 프론트가 보낸 상자를 열어서 도메인(User) 객체로 조립.
         User user = User.builder()
                 .username(request.getUsername())
                 .email(request.getEmail())
@@ -47,9 +56,10 @@ public class UserController {
                 .connectionCode(request.getConnectionCode())
                 .build();
 
-        // 서비스 호출 (이제 user 객체 하나만 넘깁니다!)
+        // 2) 실제 저장을 담당하는 UserService에 배달.
         User savedUser = userService.registerNewUser(user);
 
+        // 3) 성공했다는 편지(HttpStatus.CREATED)와 함께 저장된 정보를 프론트에게 전달.
         return new ResponseEntity<>(savedUser, HttpStatus.CREATED);
     }
 
