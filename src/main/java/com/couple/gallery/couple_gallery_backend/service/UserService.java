@@ -48,30 +48,31 @@ public class UserService {
         this.amazonS3 = amazonS3;
     }
 
-    // ▼ 설정 파일의 cloud.aws.s3.bucket.name 값을 가져옴
+    // 설정 파일의 cloud.aws.s3.bucket.name 값을 가져옴
     @Value("${cloud.aws.s3.bucket}")
     private String bucket;
 
     private static final String DEFAULT_PROFILE_IMAGE = "https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png";
 
-
+    // ========================================================
     // 이메일을 사용하여 사용자 정보를 조회하는 메서드
+    // ========================================================
     public User findUserByEmail(String email) {
         return userRepository.findByEmail(email)
                 // 조회 결과가 없으면 예외를 발생
                 .orElseThrow(() -> new IllegalArgumentException("해당 이메일의 사용자를 찾을 수 없습니다."));
     }
 
+    // ========================================================
     // 회원가입 로직 (Email 중복 검사 및 비밀번호 암호화)
-    // UserService.java
+    // ========================================================
 
-    @Transactional
+    @Transactional // 1. DB에 기록하는 일. (도중에 에러 발생 시 rollback)
     public User registerNewUser(User user) {
         // 1. 중복 검사
         if (userRepository.findByEmail(user.getEmail()).isPresent()) {
             throw new IllegalStateException("이미 존재하는 이메일입니다.");
         }
-
         // 2. 암호화
         user.setPassword(passwordEncoder.encode(user.getPassword()));
         user.setConnectionCode(passwordEncoder.encode(user.getConnectionCode()));
@@ -83,13 +84,17 @@ public class UserService {
         return userRepository.save(user);
     }
 
+    // ========================================================
+    // 프로필 업데이트 로직
+    // ========================================================
+
     @Transactional
     public User updateProfile(Long userId, MultipartFile file, String bio) {
-        // 1. 유저 찾기 (ID로 조회)
+        // 유저 찾기 (ID로 조회)
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UsernameNotFoundException("유저를 찾을 수 없습니다."));
 
-        // 3. 프로필 이미지 업로드 (파일이 들어왔을 때만)
+        // 프로필 이미지 업로드 (파일이 들어왔을 때만)
         if (file != null && !file.isEmpty()) {
             try {
                 String oldImageUrl = user.getProfileImageUrl();
@@ -97,7 +102,7 @@ public class UserService {
                 String fileName = UUID.randomUUID() + "_" + file.getOriginalFilename();
                 String s3Path = "photos/" + user.getId() + "/profile/" + fileName;
 
-                // 썸네일 생성 및 업로드 (이전에 만든 로직)
+                // 썸네일 생성 및 업로드
                 ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
                 Thumbnails.of(file.getInputStream())
                         .size(150, 150)       //  150x150으로 압축
@@ -113,9 +118,7 @@ public class UserService {
                 // S3 업로드
                 amazonS3.putObject(new PutObjectRequest(bucket, s3Path, new ByteArrayInputStream(imageBytes), metadata));
 
-                // 기존 이미지가 기본 이미지가 아니면 S3에서 삭제하는 로직 추가 가능 (선택)
-
-                // DB 업데이트
+                // DB 업데이트 (원본과 썸네일 > 70%의 원본만)
 //                user.setProfileImageUrl(amazonS3.getUrl(bucket, s3Path).toString());
                 user.setProfileImageUrl(publicUrl + "/" + s3Path);
                 deleteS3Image(oldImageUrl);
@@ -128,13 +131,14 @@ public class UserService {
         return user; // 수정된 유저 정보 반환
     }
     // ========================================================
-    // 프로필 이미지 수정 메서드 (컨트롤러에서 이걸 찾고 있었음!)
+    // 프로필 이미지 수정 메서드
     // =======================================================
     @Value("${cloud.aws.s3.public-url}")
     private String publicUrl;
 
     @Transactional
     public User updateProfileImage(String email, MultipartFile file) {
+        // 토큰에서 가져운 이메일로 이 유저가 실존하는가에 대해 찾기.
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("사용자를 찾을 수 없습니다."));
 
@@ -143,11 +147,14 @@ public class UserService {
         }
 
         try {
+            // 지우기 전 기존에 가지고 있던 프사 URL 미리 보관.
             String oldImageUrl = user.getProfileImageUrl();
 
+            // S3에 겹치지 않는 고유한 이름으로 파일명 만들기. UUID(중복 불가능한 고유한 랜덤 문자열)로 랜덤하게 생성하여 파일명 생성.
             String fileName = UUID.randomUUID() + "_profile_" + user.getId() + "_" + System.currentTimeMillis() + ".jpg";
             String s3Path = "photos/" + user.getId() + "/profile/" + fileName;
 
+            // 용량을 압축. 150x150 크기, 품질 70% 짜리의 가벼운 썸네일로 압축.
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
             Thumbnails.of(file.getInputStream())
                     .size(150, 150)        //  프사는 어차피 작게 보이니 150x150으로 더 압축
@@ -156,16 +163,19 @@ public class UserService {
                     .toOutputStream(outputStream);
             byte[] imageBytes = outputStream.toByteArray();
 
+            // 압축한 이미지의 메타데이터(용량, 파일 형식) 세팅.
             ObjectMetadata metadata = new ObjectMetadata();
             metadata.setContentLength(imageBytes.length);
             metadata.setContentType("image/jpeg");
 
+            // aws s3에 업로드
             amazonS3.putObject(new PutObjectRequest(bucket, s3Path, new ByteArrayInputStream(imageBytes), metadata));
 
-            //  프라이빗 URL 대신 퍼블릭 URL로 저장
+            // 더티 체킹(변경 감지하여 자동으로 DB 업데이트). 유저 정보에 새 프사 주소(url) 넣기.
             String fileUrl = publicUrl + "/" + s3Path;
             user.setProfileImageUrl(fileUrl);
 
+            // 업로드가 정상적으로 되었으므로, 기존 프로필 사진 삭제.
             deleteS3Image(oldImageUrl);
 
         } catch (IOException e) {
@@ -174,6 +184,7 @@ public class UserService {
 
         return user;
     }
+    // 썸네일과 원본 둘 다 저장하는 로직
 //    @Transactional
 //    public User updateProfileImage(String email, MultipartFile file) {
 //        // 1. 토큰에 있는 이메일로 유저를 찾습니다.
@@ -225,7 +236,7 @@ public class UserService {
             return;
         }
         try {
-            //  .com/ 또는 .dev/ 둘 다 대응
+
             String key = null;
             for (String delimiter : new String[]{".com/", ".dev/"}) {
                 int index = fileUrl.indexOf(delimiter);
@@ -243,9 +254,10 @@ public class UserService {
             System.err.println("S3 이미지 삭제 실패: " + e.getMessage());
         }
     }
+    // 이미지와 썸네일 같이 올리는 로직
 //    private void deleteS3Image(String fileUrl) {
 //        if (fileUrl == null || fileUrl.equals(DEFAULT_PROFILE_IMAGE)) {
-//            return; // 기본 이미지는 절대 지우면 안 됨!
+//            return; // 기본 이미지는 절대 지우면 안 됨
 //        }
 //
 //        try {
@@ -272,11 +284,11 @@ public class UserService {
 
     // 로그인 로직
     public JwtResponse authenticateUser(UserLoginRequest loginRequest) {
-        // 1. ID와 Password를 통해 Authentication 객체 생성
+        // 1. 사용자가 입력한 이메일과 비밀번호로 임시 인증용 카드키 생성.
         UsernamePasswordAuthenticationToken authenticationToken =
                 new UsernamePasswordAuthenticationToken(loginRequest.getEmail(), loginRequest.getPassword());
 
-        // 2. 실제 인증 (CustomUserDetailsService의 loadUserByUsername 호출)
+        // 2. 실제 인증. 비밀번호가 맞는지 DB정보 대조.
         Authentication authentication = authenticationManager.authenticate(authenticationToken);
 
         // 3. 인증 성공 시, JWT 토큰 생성
@@ -304,13 +316,13 @@ public class UserService {
     // ========================================================
     @Transactional // 값을 수정해야 하므로 readOnly=true를 깨고 쓰기 권한 부여
     public User updateProfileText(String email, ProfileRequest request) {
-        // 1. findUserByEmail 메서드를 재활용해서 유저를 찾습니다.
+        // findUserByEmail. 이메일로 기존 유저를 DB에서 꺼내옴.
         User user = findUserByEmail(email);
 
-        // 2. 엔티티의 필드 값을 프론트에서 보낸 새 데이터로 세팅합니다.
-        // (더티 체킹 덕분에 메소드가 끝날 때 알아서 DB에 Update 쿼리가 날아갑니다!)
+        // 자바 객체 필드 값을 변경.
         user.setUsername(request.getUsername());
 
+        // save() 없이 스냅샵과 비교하여서 알아서 SQL쿼리를 만들어서 DB에 줌.
         return user; // 수정된 유저 정보 반환
     }
 
