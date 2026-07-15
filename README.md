@@ -15,7 +15,7 @@ SavePoint는 게이머 커플/듀오를 위한 상태 공유 및 미디어 아�
 | **개발 인원** | 개인 프로젝트 (1인 개발) |
 | **주요 역할** | 백엔드 아키텍처 설계, REST API 구현, 클라우드 인프라 배포 및 비용 최적화 |
 | **서비스 환경** | 모바일 앱 (Android 우선 지원 / iOS 추후 지원 환경) |
-| **소스 코드** | [Backend Repository](https://github.com/MMOUMCS/SavePointBack_ver1.0.0) / [Frontend Repository](https://github.com/MMOUMCS/SavePointFro_ver1.0.0) | [velog](https://velog.io/@mmoumcs_/SavePoint)
+| **소스 코드** | [Backend Repository](https://github.com/MMOUMCS/SavePointBack_ver1.0.0) / [Frontend Repository](https://github.com/MMOUMCS/SavePointFro_ver1.0.0) / [velog](https://velog.io/@mmoumcs_/SavePoint) |
 
 **>>실제 작동 gif는 프론트엔드 레포지토리에 저장하였습니다.**
 
